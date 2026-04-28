@@ -1,0 +1,120 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{letterpaper, margin=1in}
+\usepackage{booktabs}
+\usepackage{enumitem}
+
+\title{ISYE 6740 Project Proposal: \\ Predicting Environmental Compliance Violations at Small Manufacturing Facilities using EPA ECHO Data}
+\author{Team 157: Pramodh Aryasomayajula and Keshav Shah}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Problem Statement}
+
+The U.S. Environmental Protection Agency (EPA) regulates roughly 800,000 facilities nationwide under statutes like the Clean Air Act (CAA), Clean Water Act (CWA), Resource Conservation and Recovery Act
+(RCRA). These sites are subject to regular inspections and enforcement. However, regulatory agencies are resource-constrained, meaning smaller facilities often receive less oversight compared to the facilities labeled as ``major sources''.
+
+Small manufacturers (NAICS 31-33, under 250 employees) make up a massive portion of this group. There are about 200,000 of these establishments in the US. Compliance is highly burdensome, costing over \$50,000 per employee annually and taking up over 2,000 hours a year for most manufacturers. Despite this, academic literature usually ignores them in favor of studying large industrial emitters.
+
+This project aims to predict which small manufacturing facilities are likely to have environmental compliance violations within a 12-month window, using the EPA's ECHO database. We want to determine if observable features (industry sector, location, permits, and inspection history) can successfully identify facilities at an elevated risk of non-compliance. A reliable predictive model would help regulatory agencies optimize their limited inspection resources. It would also help small manufacturers understand what facility traits correlate with non-compliance so they can improve their internal efforts. To our knowledge, supervised learning has not yet been applied to the small manufacturer segment of ECHO data for this specific purpose.
+
+\section{Data Description}
+
+We are using weekly-updated bulk data from the EPA ECHO database. The primary ECHO Exporter file provides facility summaries, including locations, NAICS codes, and regulatory programs. We will supplement this with program-specific files containing detailed timestamps for inspections and violations.
+
+Our data pipeline will be constructed as follows:
+
+\begin{itemize}
+    \item \textbf{Population Filter:} We will filter the ECHO Exporter down to the manufacturing sector (NAICS 31-33). We will then restrict the data to small establishments. Since exact employee counts are not listed, we will use proxies like non-major or minor facility designations under the Clean Air Act and Clean Water Act. We will clearly document the final sample size after filtering.
+    
+    \item \textbf{Feature Engineering:} We will build features across four main categories: (1) Industry (mapped 4-digit NAICS); (2) Geography (state, EPA region, urban/rural split); (3) Regulatory Profile (number of programs, permit types, years in ECHO); and (4) Compliance History (inspections, severity of past violations, enforcement actions, and non-compliant quarters over the past 3 years). All features will use a strict temporal cutoff to prevent data leakage.
+    
+    \item \textbf{Target Variable:} A binary indicator of whether a facility experienced at least one formal violation in the 12 months following the feature cutoff date. This clean separation of training features and the target ensures temporal validity.
+\end{itemize}
+
+We expect a final dataset of roughly 50,000 to 150,000 facilities. We anticipate a moderate class imbalance, estimating that the positive class (violations) will make up 5-20\% of the sample. Exact distributions and missingness rates will be documented in the final report.
+
+\section{Proposed Methodology}
+
+We are treating this as a binary classification problem. The workflow consists of preprocessing, model fitting, and evaluation.
+
+\subsection{Preprocessing}
+Missing data will be an issue since ECHO data quality varies by state and program. We will impute missing continuous variables with the median, and categorical variables with the mode or a dedicated ``missing'' category. We will also test if missingness is informative by adding missing-indicator features. Categorical variables  (NAICS group, state, EPA region) will be one-hot or target encoded based on cardinality, while continuous variables  (inspection counts, violation
+counts, years in system) will be standardized.
+
+\subsection{Models}
+We will fit and compare four classification models:
+
+\begin{itemize}
+    \item \textbf{Logistic Regression (L1/L2):} Our interpretable baseline. The L1 penalty will help with feature selection by driving less predictive coefficients to zero.
+    \item \textbf{Random Forest:} An ensemble method that handles mixed data types well and is robust to outliers. We will tune parameters like tree count, max depth, and leaf samples via cross-validation.
+    \item \textbf{XGBoost:} This will serve as our performance benchmark, as boosting often yields the best results on tabular data. We will tune the learning rate, depth, and number of estimators.
+    \item \textbf{SVM (RBF Kernel):} Included to test if non-linear decision boundaries improve classification. We will likely use a subsample for hyperparameter tuning to manage training times.
+\end{itemize}
+
+All models will be trained using 5-fold stratified cross-validation on an 80/20 train/test split. Stratification is required here to preserve the class distribution across folds.
+
+\subsection{Class Imbalance}
+If the positive class drops below 15\% of the sample, we will evaluate strategies like class weighting, SMOTE oversampling, and threshold tuning. We will report our final results both with and without these adjustments.
+
+\section{Planned Evaluation Strategy}
+
+Because of the expected class imbalance, accuracy alone is insufficient. We will evaluate our models using:
+
+\begin{itemize}
+    \item \textbf{AUC-ROC:} As the primary metric to measure overall discrimination ability.
+    \item \textbf{AUC-PR (Precision-Recall):} A highly informative complementary metric for imbalanced datasets.
+    \item \textbf{Confusion Matrices:} To track precision, recall, and F1-scores at specific operating thresholds.
+    \item \textbf{Feature Importance:} To answer our core question regarding which traits predict violations. We will compare logistic regression coefficients with tree-based permutation importance scores to check for robustness.
+\end{itemize}
+
+Finally, we will conduct a manual error analysis on the test set to examine false positives and false negatives, helping us understand the models' failure modes. We will also use paired bootstrap confidence intervals on the test set AUC-ROC to assess if performance differences between models are statistically significant.
+
+\section{Division of Responsibilities}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{p{0.45\textwidth} p{0.45\textwidth}}
+\toprule
+\textbf{Pramodh (Data \& Insights)} & \textbf{Keshav (Modeling \& Evaluation)} \\
+\midrule
+Data acquisition, filtering, cleaning, and feature engineering & Preprocessing pipeline: imputation, encoding, standardization, and train/test split \\
+Exploratory data analysis and missingness reporting & Model implementation and tuning (Logistic Regression, Random Forest, XGBoost, SVM) \\
+Feature importance analysis and domain interpretation & Class imbalance experiments and evaluation metrics (AUC-ROC, AUC-PR, bootstrap CIs) \\
+Report: Introduction, Discussion, Conclusion & Report: Data, Methodology, Results, all figures and tables \\
+\midrule
+\multicolumn{2}{c}{\textbf{Joint}: Error analysis, report review, and final editing} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Projected Timeline}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l p{0.75\textwidth}}
+\toprule
+\textbf{Period} & \textbf{Milestone} \\
+\midrule
+Weeks 1--2 & Pramodh: data acquisition, filtering, feature engineering, and EDA. Keshav: build preprocessing and cross-validation framework on sample extract. Dataset finalized by end of Week 2. \\
+Weeks 3--4 & Pramodh: EDA report, begin feature importance analysis. Keshav: implement and tune all four models, run class imbalance experiments. \\
+Weeks 5--6 & Pramodh: feature importance interpretation, draft Introduction, Discussion, and Conclusion. Keshav: finalize evaluation, generate plots, draft Data, Methodology, and Results sections. \\
+Weeks 7--8 & Joint: error analysis, report integration, review, and submission. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section*{References}
+\begin{enumerate}[label={[\arabic*]}]
+    \item U.S. Environmental Protection Agency. ``Enforcement and Compliance History Online (ECHO).'' \texttt{echo.epa.gov}. Accessed March 2026.
+    \item U.S. Census Bureau. ``County Business Patterns: 2022.'' \texttt{census.gov/programs-surveys/cbp.html}.
+    \item National Association of Manufacturers. ``The Cost of Federal Regulation to the U.S. Economy, Manufacturing, and Small Business.'' NAM, 2023.
+    \item Chen, T., \& Guestrin, C. ``XGBoost: A Scalable Tree Boosting System.'' \textit{Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining}, 2016.
+    \item Davis, J., \& Goadrich, M. ``The Relationship Between Precision-Recall and ROC Curves.'' \textit{Proceedings of the 23rd International Conference on Machine Learning (ICML)}, 2006.
+\end{enumerate}
+
+\end{document}
