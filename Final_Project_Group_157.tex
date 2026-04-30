@@ -38,9 +38,9 @@
 \section{Problem Statement}
 %% ============================================================
 
-The U.S. Environmental Protection Agency (EPA) oversees roughly 800,000 facilities under laws like the Clean Air Act (CAA), Clean Water Act (CWA), and Resource Conservation and Recovery Act (RCRA). But regulatory agencies only have so many inspectors and so much budget, and smaller facilities tend to get less attention than those classified as ``major sources.'' Small manufacturers, meaning those in NAICS sectors 31--33 that don't have a major regulatory designation, make up a large chunk of the regulated population. Compliance costs for these firms are significant too, exceeding \$50,000 per employee per year according to some estimates \cite{nam2023}.
+The U.S. Environmental Protection Agency (EPA) oversees roughly 800,000 facilities under laws like the Clean Air Act (CAA), Clean Water Act (CWA), and Resource Conservation and Recovery Act (RCRA). But regulatory agencies only have so many inspectors and so much budget, and smaller facilities tend to get less attention than those classified as major sources. Small manufacturers, meaning those in NAICS sectors 31--33 that do not have a major regulatory designation, make up a large chunk of the regulated population. Compliance costs for these firms are significant too, exceeding \$50,000 per employee per year according to some estimates \cite{nam2023}.
 
-The question we are trying to answer is: \textit{can we predict which small manufacturing facilities will have environmental compliance violations in the next year, based on their past compliance patterns and facility characteristics?} If we can build a model that does this reliably, it could help regulators decide where to focus their inspections, and also help manufacturers understand what factors are associated with non-compliance.
+The question we are trying to answer is: can we predict which small manufacturing facilities will have environmental compliance violations in the next year, based on their past compliance patterns and facility characteristics? If we can build a model that does this reliably, it could help regulators decide where to focus their inspections, and also help manufacturers understand what factors are associated with non-compliance.
 
 We treat this as a binary classification problem. Using the EPA's Enforcement and Compliance History Online (ECHO) database, we construct a pseudo-temporal prediction setup by splitting each facility's 12-quarter compliance history string into a 2-year feature window and a 1-year target window. We then compare four classifiers (Logistic Regression, Random Forest, XGBoost, and SVM) and evaluate them with AUC-ROC, AUC-PR, and bootstrap confidence intervals. As far as we know, this kind of supervised learning approach has not really been applied to the small manufacturer segment of ECHO data for violation prediction.
 
@@ -58,7 +58,7 @@ The data for this project comes from the EPA ECHO Exporter, which is a weekly-up
 We applied the following filters to get to our target population:
 \begin{enumerate}
     \item \textbf{Industry}: Kept facilities with at least one NAICS code in the manufacturing sectors (31, 32, or 33).
-    \item \textbf{Size proxy}: Removed facilities flagged as ``major'' (\texttt{FAC\_MAJOR\_FLAG = Y}). We use non-major status as a rough proxy for smaller establishments since exact employee counts aren't available in ECHO.
+    \item \textbf{Size proxy}: Removed facilities flagged as major (\texttt{FAC\_MAJOR\_FLAG = Y}). We use non-major status as a rough proxy for smaller establishments since exact employee counts are not available in ECHO.
     \item \textbf{Activity}: Only kept active facilities (\texttt{FAC\_ACTIVE\_FLAG = Y}).
     \item \textbf{History completeness}: Required the full 12-quarter compliance history string to be present.
 \end{enumerate}
@@ -67,7 +67,7 @@ After all of these filters, we ended up with about 120,000 small manufacturing f
 
 \subsection{Target Variable Construction}
 
-The ECHO Exporter includes a field called \texttt{FAC\_3YR\_COMPLIANCE\_HISTORY}, which is a 12-character string where each character represents one quarter's compliance status over the past three years. The characters are: \texttt{\_} (no violation), \texttt{V} (violation), \texttt{S} (significant non-compliance), and \texttt{U} (unknown). Position 0 is the oldest quarter and position 11 is the most recent.
+The ECHO Exporter includes a field called \texttt{FAC\_3YR\_COMPLIANCE\_HISTORY}, which is a 12-character string where each character represents one quarter's compliance status over the past three years. Each character encodes one quarter: underscore (\texttt{\_}) for no violation, \texttt{V} for violation, \texttt{S} for significant non-compliance, and \texttt{U} for unknown. Position 0 is the oldest quarter and position 11 is the most recent.
 
 We split this string to create a pseudo-temporal prediction problem:
 \begin{itemize}
@@ -102,7 +102,16 @@ Regulatory Profile & Program flags (CAA, CWA, RCRA, SDWA, TRI, GHG), \texttt{n\_
 
 \subsection{Data Leakage Prevention}
 
-A number of fields in ECHO directly encode the full 12-quarter compliance history or current compliance status, which would leak the target variable if we included them. We excluded: \texttt{FAC\_QTRS\_WITH\_NC} (which exactly equals the count of V/S across all 12 quarters), \texttt{FAC\_COMPLIANCE\_STATUS}, \texttt{FAC\_SNC\_FLG}, all program-specific \texttt{*\_COMPLIANCE\_STATUS} and \texttt{*\_SNC\_FLAG} fields, and \texttt{FAC\_DAYS\_LAST\_INSPECTION}. We did keep cumulative lifetime counts like \texttt{FAC\_INSPECTION\_COUNT}, but ran a sensitivity analysis to check whether those introduce any soft leakage since they might include activity from the target period.
+A number of fields in ECHO directly encode the full 12-quarter compliance history or current compliance status, which would leak the target variable if we included them. We excluded the following fields:
+
+\begin{itemize}[nosep]
+    \item \texttt{FAC\_QTRS\_WITH\_NC} (exactly equals the count of V/S across all 12 quarters)
+    \item \texttt{FAC\_COMPLIANCE\_STATUS}, \texttt{FAC\_SNC\_FLG}
+    \item All program-specific \texttt{*\_COMPLIANCE\_STATUS} and \texttt{*\_SNC\_FLAG} fields
+    \item \texttt{FAC\_DAYS\_LAST\_INSPECTION}
+\end{itemize}
+
+We did keep cumulative lifetime counts like \texttt{FAC\_INSPECTION\_COUNT}, but ran a sensitivity analysis to check whether those introduce any soft leakage since they might include activity from the target period.
 
 
 %% ============================================================
@@ -119,7 +128,7 @@ We split the data 80/20 into training and test sets, stratified by the target va
 
 We trained four classifiers, picking models that cover a range of complexity and interpretability:
 
-\textbf{Logistic Regression (L1).} This serves as our interpretable baseline. The L1 penalty does feature selection by pushing less useful coefficients to zero. We tuned the regularization strength $C \in \{0.001, 0.01, 0.1, 1, 10\}$ using 5-fold stratified CV with AUC-ROC scoring, and set class weights to ``balanced'' to handle the imbalance.
+\textbf{Logistic Regression (L1).} This serves as our interpretable baseline. The L1 penalty does feature selection by pushing less useful coefficients to zero. We tuned the regularization strength $C \in \{0.001, 0.01, 0.1, 1, 10\}$ using 5-fold stratified CV with AUC-ROC scoring, and set class weights to \texttt{balanced} to handle the imbalance.
 
 \textbf{Random Forest.} An ensemble of decision trees that works well with mixed feature types and gives us built-in feature importance. We tuned the number of trees $\{200, 500\}$, max depth $\{5, 10, 20\}$, and minimum samples per leaf $\{5, 20, 50\}$ via grid search with balanced class weights.
 
@@ -174,7 +183,7 @@ SVM (RBF)           & 0.957 [0.953, 0.961] & 0.698 & 0.414 & 0.903 & 0.567 \\
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\textwidth]{figures/confusion_matrices.png}
+    \includegraphics[width=0.85\textwidth]{figures/confusion_matrices.png}
     \caption{Confusion matrices at the Youden's J optimal threshold for each model.}
     \label{fig:cm}
 \end{figure}
@@ -185,7 +194,7 @@ We looked at feature importance across three of the models to see which facility
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\textwidth]{figures/feature_importance.png}
+    \includegraphics[width=0.75\textwidth]{figures/feature_importance.png}
     \caption{Feature importance across models. LR uses absolute coefficient values, RF uses permutation importance, and XGBoost uses gain-based importance.}
     \label{fig:importance}
 \end{figure}
@@ -218,7 +227,7 @@ SMOTE           & 0.972 & 0.814 \\
 
 \subsection{Sensitivity Analysis}
 
-To check for potential soft leakage from the cumulative lifetime count features (which might include activity during the target period), we retrained XGBoost with and without those features. Dropping the cumulative counts lowered AUC-ROC from 0.974 to 0.926, a drop of 0.048. This is not nothing, but the model without those counts still gets strong discrimination (AUC $>$ 0.92), which tells us that the compliance history string features -- which have a clean temporal split -- are carrying most of the predictive signal. The cumulative counts add useful information on top of that rather than being pure leakage.
+To check for potential soft leakage from the cumulative lifetime count features (which might include activity during the target period), we retrained XGBoost with and without those features. Dropping the cumulative counts lowered AUC-ROC from 0.974 to 0.926, a drop of 0.048. This is not nothing, but the model without those counts still gets strong discrimination (AUC $>$ 0.92), which tells us that the compliance history string features, which have a clean temporal split, are carrying most of the predictive signal. The cumulative counts add useful information on top of that rather than being pure leakage.
 
 \subsection{Error Analysis}
 
